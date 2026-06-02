@@ -11,8 +11,7 @@
 ---
 
 # 目的
-EKS のコスト削減をするために、Workload を On-Demand instance から 
-Spot instance に移行するにあたり、
+EKS のコスト削減をするために、Workload を On-Demand instance から Spot instance に移行するにあたり、  
 Spot Node や Pod を安定稼働することができるか検証する  
 
 実際に EKS Cluster、Spot NodeGroup を起動し、ステータスを監視・評価する検証を行う  
@@ -122,7 +121,7 @@ Pod の再起動や不安定さを確認する
 
 - rebalance recommendation → interruption notice
 - interruption notice → node drain start
-    - node drain start は Kubernetes Event（Node cordon / Pod eviction 開始）から取得する
+  - node drain start は Kubernetes Event（Node cordon / Pod eviction 開始）から取得する
 - pod terminated → replacement pod scheduled
 - replacement pod scheduled → pod Ready
 - instance launch → node Ready
