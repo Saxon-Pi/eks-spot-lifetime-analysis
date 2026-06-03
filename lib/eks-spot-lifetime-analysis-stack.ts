@@ -3,6 +3,9 @@ import { Construct } from 'constructs';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as eks from 'aws-cdk-lib/aws-eks';
+import { KubectlV31Layer } from '@aws-cdk/lambda-layer-kubectl-v31';
 
 /*
 EKS Spot NodeGroup の安定性を評価するための検証スタック
@@ -35,9 +38,23 @@ Kubernetes Event収集
 - Spot によるコスト削減効果
 */
 
+/*
+EKS Cluster 構成
+
+EKS Cluster
+├─ On-Demand NodeGroup
+│  └─ CoreDNS / aws-node / kube-proxy / 監視系Pod (常時稼働 Workload): desired=1
+└─ Spot NodeGroup
+   └─ 検証 Workload 用: desired=2
+*/
+
 export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    // =====================================================
+    // CloudWatch Logs + EventBridge Rules
+    // =====================================================
 
     // Spot / EC2 イベントを集約する CloudWatch Logs
     // (EventBridge → CloudWatch Logs)
@@ -82,5 +99,110 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
       },
       targets: [new targets.CloudWatchLogGroup(spotEventLogGroup)],
     });
+
+    // =====================================================
+    // Network
+    // =====================================================
+
+    // NAT Gateway なしの検証用VPC
+    const vpc = new ec2.Vpc(this, 'EksSpotTestVpc', {
+      maxAzs: 2,
+      natGateways: 0,
+    });
+
+    // ECR image pull 用
+    vpc.addGatewayEndpoint('S3Endpoint', {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+    });
+
+    vpc.addInterfaceEndpoint('EcrApiEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.ECR,
+    });
+
+    vpc.addInterfaceEndpoint('EcrDockerEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
+    });
+
+    // CloudWatch Logs 出力用
+    vpc.addInterfaceEndpoint('CloudWatchLogsEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+    });
+    
+    // AWS Security Token Service:
+    // Pod / Add-on が IAM Role を引き受けるための一時認証情報を取得する
+    vpc.addInterfaceEndpoint('StsEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.STS,
+    });
+
+    vpc.addInterfaceEndpoint('Ec2Endpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.EC2,
+    });
+
+    vpc.addInterfaceEndpoint('EksEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.EKS,
+    });
+
+    vpc.addInterfaceEndpoint('CloudWatchMonitoringEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH,
+    });
+
+    // =====================================================
+    // EKS Cluster + Managed NodeGroups
+    // =====================================================
+
+    // EKS Cluster
+    const cluster = new eks.Cluster(this, 'EksSpotTestCluster', {
+      clusterName: 'eks-spot-lifetime-test',
+      version: eks.KubernetesVersion.V1_31,
+      vpc,
+      defaultCapacity: 0,
+      kubectlLayer: new KubectlV31Layer(this, 'KubectlLayer'),
+    });
+
+    // On-Demand NodeGroup: 
+    // CoreDNS / aws-node / kube-proxy / 監視系Pod など、常時稼働 Workload 実行用
+    cluster.addNodegroupCapacity('OnDemandNodeGroup', {
+      nodegroupName: 'ondemand-system-ng',
+      capacityType: eks.CapacityType.ON_DEMAND,
+      desiredSize: 1,
+      minSize: 1,
+      maxSize: 1,
+      instanceTypes: [
+        new ec2.InstanceType('t3.medium'),
+      ],
+      labels: {
+        'node-lifecycle': 'on-demand',
+        'workload-type': 'system',
+      },
+    });
+
+    // Spot NodeGroup: 検証 Workload 用
+    cluster.addNodegroupCapacity('SpotNodeGroup', {
+      nodegroupName: 'spot-workload-ng',
+      capacityType: eks.CapacityType.SPOT,
+      desiredSize: 2,
+      minSize: 1,
+      maxSize: 3,
+      instanceTypes: [
+        new ec2.InstanceType('t3.medium'),
+        new ec2.InstanceType('t3a.medium'),
+        new ec2.InstanceType('m5.large'),
+        new ec2.InstanceType('m5a.large'),
+        new ec2.InstanceType('m5n.large'),
+        new ec2.InstanceType('m4.large'),
+      ],
+      labels: {
+        'node-lifecycle': 'spot',
+        'workload-type': 'spot-test',
+      },
+      taints: [
+        {
+          key: 'spot',
+          value: 'true',
+          effect: eks.TaintEffect.NO_SCHEDULE,
+        },
+      ],
+    });
+
   }
 }
