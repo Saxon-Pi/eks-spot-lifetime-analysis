@@ -150,13 +150,19 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
     // EKS Cluster + Managed NodeGroups
     // =====================================================
 
-    // EKS Cluster
+    // EKS Cluster (NATなし)
     const cluster = new eks.Cluster(this, 'EksSpotTestCluster', {
       clusterName: 'eks-spot-lifetime-test',
       version: eks.KubernetesVersion.V1_31,
       vpc,
+      vpcSubnets: [
+        {
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+        },
+      ],
       defaultCapacity: 0,
       kubectlLayer: new KubectlV31Layer(this, 'KubectlLayer'),
+      placeClusterHandlerInVpc: false,
     });
 
     // On-Demand NodeGroup: 
@@ -167,6 +173,9 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
       desiredSize: 1,
       minSize: 1,
       maxSize: 1,
+      subnets: {
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+      },
       instanceTypes: [
         new ec2.InstanceType('t3.medium'),
       ],
@@ -183,6 +192,9 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
       desiredSize: 2,
       minSize: 1,
       maxSize: 3,
+      subnets: {
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+      },
       instanceTypes: [
         new ec2.InstanceType('t3.medium'),
         new ec2.InstanceType('t3a.medium'),
