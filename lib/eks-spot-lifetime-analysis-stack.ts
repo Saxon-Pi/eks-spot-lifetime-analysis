@@ -217,8 +217,9 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
       ],
       labels: {
         'node-lifecycle': 'spot',
-        'workload-type': 'spot-test',
+        'workload-type': 'spot-test', // nodeSelector 用
       },
+      // toleration: spot=true の Pod のみを許容する
       taints: [
         {
           key: 'spot',

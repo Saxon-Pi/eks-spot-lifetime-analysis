@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spot-test-app
+  namespace: spot-test
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: spot-test-app
+  template:
+    metadata:
+      labels:
+        app: spot-test-app
+    spec:
+      nodeSelector:
+        workload-type: spot-test
+      tolerations:
+        - key: "spot"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+      # Pod 終了開始から、最大60秒だけ安全に終了する猶予を与える
+      # Pod 終了開始
+      # ↓
+      # preStop で10秒待機 (drain時に終了処理が始まったことをログで見やすくするため)
+      # ↓
+      # SIGTERM がアプリへ届く
+      # ↓
+      # アプリが終了処理
+      # ↓
+      # 合計60秒を超えたら強制終了
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: spot-test-app
+          image: <AWS_ACCOUNT_ID>.dkr.ecr.ap-northeast-1.amazonaws.com/spot-test-app:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    echo '{"event":"pre_stop_hook_started"}'
+                    sleep 10
+                    echo '{"event":"pre_stop_hook_completed"}'
+          # この Pod はリクエストを受けていい状態か？
+          # /readyz が 200 を返すと、その Pod は Ready になる
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 2
+          # このコンテナは生きているか？
+          # /healthz が失敗し続けると、Kubernetes がコンテナを再起動する
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 3
