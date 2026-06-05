@@ -143,7 +143,19 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
     });
 
     vpc.addInterfaceEndpoint('CloudWatchMonitoringEndpoint', {
-      service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH,
+      service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_MONITORING,
+    });
+
+    vpc.addInterfaceEndpoint('LambdaEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.LAMBDA,
+    });
+
+    vpc.addInterfaceEndpoint('CloudFormationEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.CLOUDFORMATION,
+    });
+
+    vpc.addInterfaceEndpoint('AutoscalingEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.AUTOSCALING,
     });
 
     // =====================================================
