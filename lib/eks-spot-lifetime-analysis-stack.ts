@@ -7,6 +7,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as eks from 'aws-cdk-lib/aws-eks';
 import { KubectlV31Layer } from '@aws-cdk/lambda-layer-kubectl-v31';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
+import * as iam from 'aws-cdk-lib/aws-iam';
 
 /*
 EKS Spot NodeGroup の安定性を評価するための検証スタック
@@ -160,6 +161,15 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
     });
 
     // =====================================================
+    // IAM
+    // =====================================================
+
+    const eksAdminRole = new iam.Role(this, 'EksAdminRole', {
+      roleName: 'eks-spot-lifetime-admin-role',
+      assumedBy: new iam.AccountRootPrincipal(),
+    });
+
+    // =====================================================
     // EKS Cluster + Managed NodeGroups
     // =====================================================
 
@@ -176,6 +186,7 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
       defaultCapacity: 0,
       kubectlLayer: new KubectlV31Layer(this, 'KubectlLayer'),
       placeClusterHandlerInVpc: false,
+      mastersRole: eksAdminRole,
     });
 
     // On-Demand NodeGroup: 
