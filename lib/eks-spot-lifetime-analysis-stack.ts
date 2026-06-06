@@ -6,6 +6,7 @@ import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as eks from 'aws-cdk-lib/aws-eks';
 import { KubectlV31Layer } from '@aws-cdk/lambda-layer-kubectl-v31';
+import * as ecr from 'aws-cdk-lib/aws-ecr';
 
 /*
 EKS Spot NodeGroup の安定性を評価するための検証スタック
@@ -228,6 +229,20 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
         },
       ],
     });
+
+    // =====================================================
+    // ECR
+    // =====================================================
+    
+    const repository = new ecr.Repository(
+      this,
+      'SpotTestRepository',
+      {
+        repositoryName: 'spot-test-app',
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        emptyOnDelete: true,
+      },
+    );
 
   }
 }

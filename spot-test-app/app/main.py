@@ -27,7 +27,6 @@ CloudWatch Logs
 import json
 import os
 import signal
-import sys
 from datetime import datetime, timezone
 
 from fastapi import FastAPI
@@ -49,8 +48,11 @@ Node と Pod 情報をログ出力する
 → application_started
 
 SIGTERM受信時
-→ application_sigterm_received (アプリ終了開始) 
-→ application_shutdown_completed (終了処理完了 ※今のコードでは終了直前)
+→ application_sigterm_received
+→ application_shutdown_started
+
+FastAPI / uvicorn の shutdown 処理時
+→ application_shutdown_completed
 """
 def log_event(event: str, **kwargs) -> None:
     payload = {
@@ -80,6 +82,7 @@ def healthz():
 @app.get("/readyz")
 def readyz():
     if is_shutting_down:
+        # 503 で Ready → Not Ready
         return JSONResponse(status_code=503, content={"status": "shutting_down"})
     return {"status": "ready"}
 
@@ -88,19 +91,24 @@ def readyz():
 def root():
     return {"message": "hello from spot test app"}
 
-
+# アプリの終了処理
 def handle_sigterm(signum, frame):
+    # readinessProbe で 503 を返すようにフラグ更新
     global is_shutting_down
     is_shutting_down = True
 
+    # ログ出力
     log_event(
         "application_sigterm_received",
         signal=signum,
     )
 
     # preStop / terminationGracePeriodSeconds の観測用
+    log_event("application_shutdown_started")
+
+@app.on_event("shutdown")
+def on_shutdown():
     log_event("application_shutdown_completed")
-    sys.exit(0)
 
 # 終了命令が出たときに handle_sigterm 関数を実行
 signal.signal(signal.SIGTERM, handle_sigterm)
