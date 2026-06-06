@@ -191,7 +191,7 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
 
     // On-Demand NodeGroup: 
     // CoreDNS / aws-node / kube-proxy / 監視系Pod など、常時稼働 Workload 実行用
-    cluster.addNodegroupCapacity('OnDemandNodeGroup', {
+    const onDemandNodeGroup = cluster.addNodegroupCapacity('OnDemandNodeGroup', {
       nodegroupName: 'ondemand-system-ng',
       capacityType: eks.CapacityType.ON_DEMAND,
       desiredSize: 1,
@@ -210,7 +210,7 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
     });
 
     // Spot NodeGroup: 検証 Workload 用
-    cluster.addNodegroupCapacity('SpotNodeGroup', {
+    const spotNodeGroup = cluster.addNodegroupCapacity('SpotNodeGroup', {
       nodegroupName: 'spot-workload-ng',
       capacityType: eks.CapacityType.SPOT,
       desiredSize: 2,
@@ -240,6 +240,29 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
         },
       ],
     });
+
+    onDemandNodeGroup.role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+    );
+
+    spotNodeGroup.role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+    );
+
+    // =====================================================
+    // EKS Addon
+    // =====================================================
+
+    // CloudWatch Observability add-on
+    // CloudWatch Agent / Fluent Bit を導入し、
+    // Container Insights メトリクスとコンテナログを収集する
+    const cloudWatchObservabilityAddon = new eks.CfnAddon(this, 'CloudWatchObservabilityAddon', {
+      clusterName: cluster.clusterName,
+      addonName: 'amazon-cloudwatch-observability',
+    });
+
+    cloudWatchObservabilityAddon.node.addDependency(onDemandNodeGroup);
+    cloudWatchObservabilityAddon.node.addDependency(spotNodeGroup);
 
     // =====================================================
     // ECR
