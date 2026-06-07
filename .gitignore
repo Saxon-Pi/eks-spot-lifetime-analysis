@@ -9,3 +9,4 @@ cdk.out
 
 /mywork
 spot-test-app/k8s/deployment.yaml
+spot-test-app/k8s/kubernetes-event-exporter.yaml

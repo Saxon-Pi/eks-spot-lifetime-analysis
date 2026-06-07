@@ -268,11 +268,25 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
     // ECR
     // =====================================================
     
+    // 検証用 FastAPI アプリの ECR Repository
     const repository = new ecr.Repository(
       this,
       'SpotTestRepository',
       {
         repositoryName: 'spot-test-app',
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        emptyOnDelete: true,
+      },
+    );
+
+    // Kubernetes Event Exporter 用 ECR Repository
+    // NAT Gateway なし構成のため、外部Registry (ghcr.io) の image を
+    // ECR にミラーしてから EKS Node から pull する
+    const eventExporterRepository = new ecr.Repository(
+      this,
+      'KubernetesEventExporterRepository',
+      {
+        repositoryName: 'kubernetes-event-exporter',
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         emptyOnDelete: true,
       },

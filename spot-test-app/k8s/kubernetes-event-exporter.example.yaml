@@ -1,21 +1,56 @@
+# Event Exporter というアプリを動かすために必要な Kubernetes リソース一式
+# ServiceAccount: Pod ID (IAM User / Role のようなもの)
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: kubernetes-event-exporter
   namespace: amazon-cloudwatch
 ---
+# ClusterRole: Pod に許可するアクション (IAM Policy のようなもの)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: kubernetes-event-exporter
 rules:
   - apiGroups: [""]
-    resources: ["events"]
-    verbs: ["get", "list", "watch"]
+    resources:
+      - events
+      - pods
+      - nodes
+      - namespaces
+      - services
+      - endpoints
+    verbs:
+      - get
+      - list
+      - watch
   - apiGroups: ["events.k8s.io"]
-    resources: ["events"]
-    verbs: ["get", "list", "watch"]
+    resources:
+      - events
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - replicasets
+      - daemonsets
+      - statefulsets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - cronjobs
+    verbs:
+      - get
+      - list
+      - watch
 ---
+# ClusterRoleBinding: ServiceAccount に ClusterRole をアタッチ
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -29,6 +64,8 @@ subjects:
     name: kubernetes-event-exporter
     namespace: amazon-cloudwatch
 ---
+# ConfigMap: kubernetes-event-exporter の設定ファイル
+# Eventを受信 → stdoutへ出力 という設定
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -67,8 +104,8 @@ spec:
       serviceAccountName: kubernetes-event-exporter
       containers:
         - name: kubernetes-event-exporter
-          image: <AWS_ACCOUNT_ID>.dkr.ecr.ap-northeast-1.amazonaws.com/kubernetes-event-exporter:v1.7
-          imagePullPolicy: IfNotPresent
+          image: <AWS_ACCOUNT_ID>.dkr.ecr.ap-northeast-1.amazonaws.com/kubernetes-event-exporter:v1.7-amd64
+          imagePullPolicy: Always
           args:
             - -conf=/data/config.yaml
           volumeMounts:
