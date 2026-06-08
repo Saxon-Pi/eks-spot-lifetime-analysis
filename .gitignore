@@ -10,3 +10,4 @@ cdk.out
 /mywork
 spot-test-app/k8s/deployment.yaml
 spot-test-app/k8s/kubernetes-event-exporter.yaml
+spot-test-app/k8s/aws-node-termination-handler.yaml

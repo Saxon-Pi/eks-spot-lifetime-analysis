@@ -1,3 +1,5 @@
+# Node Termination Handler
+# Spot Node の終了通知を受けた際に cordon / drain を実行する
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -5,6 +7,7 @@ metadata:
   namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+# Node は複数 Namespace を跨ぐ可能性があるため ClusterRole を使用する
 kind: ClusterRole
 metadata:
   name: aws-node-termination-handler
@@ -68,10 +71,21 @@ spec:
         - name: aws-node-termination-handler
           image: <AWS_ACCOUNT_ID>.dkr.ecr.ap-northeast-1.amazonaws.com/aws-node-termination-handler:v1.25.2-amd64
           imagePullPolicy: Always
+
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          # コンテナ起動時にアプリへ渡す 起動オプション
           args:
-            - --metadata-url=http://169.254.169.254
-            - --enable-spot-interruption-draining=true
-            - --enable-rebalance-monitoring=true
-            - --enable-rebalance-draining=true
-            - --enable-scheduled-event-draining=true
-            - --enable-sqs-termination-draining=false
+            - --metadata-url=http://169.254.169.254    # EC2 Instance Metadata Service を見る場所
+            - --enable-spot-interruption-draining=true # Spot終了2分前通知を検知したらdrainする
+            - --enable-rebalance-monitoring=true       # Rebalance Recommendation を監視する
+            - --enable-rebalance-draining=true         # Rebalance Recommendation を受けた時も drain 対象にする
+            - --enable-scheduled-event-draining=true   # EC2 scheduled event も drain 対象にする
+            - --check-tag-before-draining=false        # 今回は SQS/EventBridge 連携モードを使わずに IMDS mode で動かす
+            # NTH で Rebalance を有効にすると、
+            # Rebalance Recommendation -> NTH -> cordon -> drain が発生する
+            # つまり、まだ生きてる Node なのに、Pod 退避開始が発生する
+            # 退避した後 Node はそのままになる（場合もある）

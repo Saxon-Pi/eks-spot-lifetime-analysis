@@ -292,5 +292,17 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
       },
     );
 
+    // Node Termination Handler 用 ECR Repository
+    // Spot 終了通知から kubectl cordon, drain を行い Graceful shutdown を実現する
+    const nodeTerminationHandlerRepository = new ecr.Repository(
+      this,
+      'NodeTerminationHandlerRepository',
+      {
+        repositoryName: 'aws-node-termination-handler',
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        emptyOnDelete: true,
+      },
+    );
+
   }
 }
