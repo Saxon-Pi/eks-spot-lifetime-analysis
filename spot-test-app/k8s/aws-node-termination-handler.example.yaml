@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aws-node-termination-handler
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aws-node-termination-handler
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - pods
+      - events
+    verbs:
+      - get
+      - list
+      - watch
+      - patch
+      - update
+      - create
+  - apiGroups: ["apps"]
+    resources:
+      - daemonsets
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: aws-node-termination-handler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: aws-node-termination-handler
+subjects:
+  - kind: ServiceAccount
+    name: aws-node-termination-handler
+    namespace: kube-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: aws-node-termination-handler
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: aws-node-termination-handler
+  template:
+    metadata:
+      labels:
+        app: aws-node-termination-handler
+    spec:
+      serviceAccountName: aws-node-termination-handler
+      nodeSelector:
+        node-lifecycle: spot
+      tolerations:
+        - key: "spot"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+      containers:
+        - name: aws-node-termination-handler
+          image: <AWS_ACCOUNT_ID>.dkr.ecr.ap-northeast-1.amazonaws.com/aws-node-termination-handler:v1.25.2-amd64
+          imagePullPolicy: Always
+          args:
+            - --metadata-url=http://169.254.169.254
+            - --enable-spot-interruption-draining=true
+            - --enable-rebalance-monitoring=true
+            - --enable-rebalance-draining=true
+            - --enable-scheduled-event-draining=true
+            - --enable-sqs-termination-draining=false
