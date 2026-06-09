@@ -8,6 +8,8 @@ import * as eks from 'aws-cdk-lib/aws-eks';
 import { KubectlV31Layer } from '@aws-cdk/lambda-layer-kubectl-v31';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 
 /*
 EKS Spot NodeGroup の安定性を評価するための検証スタック
@@ -55,6 +57,20 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
     super(scope, id, props);
 
     // =====================================================
+    // SNS Notification
+    // =====================================================
+
+    // Spot / EC2 イベント通知用 SNS Topic
+    const spotEventTopic = new sns.Topic(this, 'SpotEventNotificationTopic', {
+      topicName: 'eks-spot-event-notification',
+    });
+
+    // メール通知先
+    spotEventTopic.addSubscription(
+      new subscriptions.EmailSubscription('YOUR_EMAIL@example.com'),
+    );
+
+    // =====================================================
     // CloudWatch Logs + EventBridge Rules
     // =====================================================
 
@@ -68,24 +84,30 @@ export class EksSpotLifetimeAnalysisStack extends cdk.Stack {
 
     // Spot Instance の終了リスク上昇を通知する Rebalance Recommendation を取得する EventBridge Rule
     // → Rebalance 発生時刻を記録し、Rebalance → Interruption の差分分析に利用する
-    new events.Rule(this, 'SpotRebalanceRule', {
+    const spotRebalanceRule = new events.Rule(this, 'SpotRebalanceRule', {
       ruleName: 'eks-spot-rebalance-recommendation',
       eventPattern: {
         source: ['aws.ec2'],
         detailType: ['EC2 Instance Rebalance Recommendation'],
       },
-      targets: [new targets.CloudWatchLogGroup(spotEventLogGroup)],
+      targets: [
+        new targets.CloudWatchLogGroup(spotEventLogGroup),
+        new targets.SnsTopic(spotEventTopic),
+      ],
     });
 
     // Spot 終了2分前通知をトリガーにする EventBridgeルール
     // → Interruption Notice 発生時刻を記録するため
-    new events.Rule(this, 'SpotInterruptionRule', {
+    const spotInterruptionRule = new events.Rule(this, 'SpotInterruptionRule', {
       ruleName: 'eks-spot-interruption-warning',
       eventPattern: {
         source: ['aws.ec2'],
         detailType: ['EC2 Spot Instance Interruption Warning'],
       },
-      targets: [new targets.CloudWatchLogGroup(spotEventLogGroup)],
+      targets: [
+        new targets.CloudWatchLogGroup(spotEventLogGroup),
+        new targets.SnsTopic(spotEventTopic),
+      ],
     });
 
     // EC2インスタンスのステート変化をトリガーにするEventBridgeルール
