@@ -4,7 +4,7 @@ kind: Namespace
 metadata:
   name: spot-test
 ---
-# Deployment作成
+# Deployment 作成
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,8 +21,19 @@ spec:
       labels:
         app: spot-test-app
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1 # Node 間の Pod 数の差
+          topologyKey: kubernetes.io/hostname # Node 単位で分散
+          whenUnsatisfiable: DoNotSchedule # 分散できない場合は配置しない
+          #whenUnsatisfiable: ScheduleAnyway # Node の障害発生時などは偏りを許可する
+          labelSelector:
+            matchLabels:
+              app: spot-test-app
+          matchLabelKeys:
+            - pod-template-hash # 同じ ReplicaSet / 同じリビジョンの Pod 同士で分散を見る
       # Spot NodeGroup にだけ配置する
       nodeSelector:
+        node-lifecycle: spot
         workload-type: spot-test
       # Spot Node の taint を許容する
       tolerations:
