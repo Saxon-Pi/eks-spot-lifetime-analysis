@@ -24,8 +24,8 @@ spec:
       topologySpreadConstraints:
         - maxSkew: 1 # Node 間の Pod 数の差
           topologyKey: kubernetes.io/hostname # Node 単位で分散
-          whenUnsatisfiable: DoNotSchedule # 分散できない場合は配置しない
-          #whenUnsatisfiable: ScheduleAnyway # Node の障害発生時などは偏りを許可する
+          #whenUnsatisfiable: DoNotSchedule # 分散できない場合は配置しない
+          whenUnsatisfiable: ScheduleAnyway # Node の障害発生時などは偏りを許可する
           labelSelector:
             matchLabels:
               app: spot-test-app
@@ -114,3 +114,16 @@ spec:
     - name: http
       port: 80
       targetPort: 8080
+---
+# PDB
+# spot-test-app のPodは、自発的な退避 / drain では最低1台は利用可能にする
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: spot-test-app
+  namespace: spot-test
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: spot-test-app
