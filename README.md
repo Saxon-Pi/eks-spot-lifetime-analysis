@@ -154,3 +154,27 @@ Spot Instance の安全な運用は、
 を組み合わせることで、  
 Spot Instance 終了時に Pod が安全に退避し、  
 アプリケーションが Graceful Shutdown できる基盤を構築・検証した  
+
+## 未観測事項
+
+本検証期間中（約5日間）では、  
+Spot Interruption および Rebalance Recommendation は発生しなかった
+
+そのため実イベントによる検証は未実施である  
+
+ただし手動 Drain により、  
+Node Termination Handler 相当の動作を再現し  
+Pod Eviction と再スケジュール動作を確認した  
+
+### 手動 Drain による Graceful Shutdown 確認
+
+手動で Spot Node を Drain し、Pod の退避と再配置を確認した  
+
+確認結果:  
+
+- 新 Pod は旧 Pod の終了処理開始前に起動していた
+- 新 Pod は `application_started` から約1.6秒で readiness probe が `200 OK` になった
+- 旧 Pod は SIGTERM 受信後、readiness probe が `503 Service Unavailable` となり、Service のルーティング対象から外れることを確認した
+- PDB により、最低1Podは稼働状態を維持できた
+
+これにより、Node Drain 時に Pod が Graceful Shutdown しつつ、新 Pod へ安全に切り替わることを確認した。
